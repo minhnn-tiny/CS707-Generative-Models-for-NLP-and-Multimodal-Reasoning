@@ -614,21 +614,21 @@ LaTeX Font Info:    Trying to load font information for T1+pcr on input line 39
  (t1pcr.fd
 File: t1pcr.fd 2001/06/04 font definitions for T1/pcr.
 )
+Overfull \hbox (4.51503pt too wide) in paragraph at lines 39--39
+[][] 
+ []
+
 File: figures/fig_overview.pdf Graphic file (type pdf)
 <use figures/fig_overview.pdf>
- [1
+[1
 
-]
-Underfull \vbox (badness 7595) has occurred while \output is active []
-
- [2]
+] [2]
 File: figures/fig_evalsets.pdf Graphic file (type pdf)
 <use figures/fig_evalsets.pdf>
 File: figures/fig_auroc.pdf Graphic file (type pdf)
 <use figures/fig_auroc.pdf>
-
-[3] [4] (proposal.bbl [5] [6]) [7] [8] [9] (proposal.aux)
+ [3] (proposal.bbl [4] [5] [6]) [7] [8] [9] (proposal.aux)
 Package rerunfilecheck Info: File `proposal.out' has not changed.
 (rerunfilecheck)             Checksum: 9A10054ED384FB973F139F23A880B516;2365.
  )
-Output written on proposal.xdv (9 pages, 80384 bytes).
+Output written on proposal.xdv (9 pages, 78316 bytes).
