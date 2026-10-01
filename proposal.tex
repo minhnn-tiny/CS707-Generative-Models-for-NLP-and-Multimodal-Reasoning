@@ -20,12 +20,11 @@
 
 \newcommand{\accept}{\textsc{accept}}
 \newcommand{\reject}{\textsc{reject}}
-\newcommand{\dvv}{DrawVLA-Verify}
+\newcommand{\dvv}{DrawVerify}
 
-\title{DrawVLA-Verify: Validating Sketched \\ Robot Instructions Before Execution}
+\title{DrawVerify: Validating Sketched \\ Robot Instructions Before Execution}
 
-% TODO: replace the placeholder names/e-mails below with the team members' details.
-\author{Duc Anh Do, Tran Huu Loc \& Nhat Minh Nguyen \thanks{CS707 Group Project Proposal, Track~B (novel task formulation). Replace placeholder names and e-mails before submission.} \\
+\author{Duc Anh Do, Tran Huu Loc \& Nhat Minh Nguyen \thanks{CS707 Group Project Proposal, Track~B (novel task formulation).} \\
 School of Computing and Information Systems \\
 Singapore Management University \\
 \texttt{\{doducanh.2026, tranhuuloc.2026, nm.nguyen.2026\}@phdcs.smu.edu.sg}
@@ -39,98 +38,85 @@ Singapore Management University \\
 \lhead{CS707 Group Project Proposal (ICLR 2027 format) --- Track B}
 
 \begin{abstract}
-Sketches let a person tell a robot \emph{which} object to manipulate (a circle) and \emph{where} it should go (an arrow) without naming anything, but existing sketch-conditioned robot systems assume the drawing is correct. We propose \textbf{sketch-prompt validation}---deciding \emph{before} any action whether a drawn instruction is correct, consistent across circle, arrow, and caption, and sufficient for a unique action, and saying why not---as an explicit, benchmarked task. A pilot simulator-grounded generator over LIBERO yields 37,970 labelled prompts; frontier vision-language models (VLMs) fail it zero-shot (best 0.79 accuracy), a 500M LoRA-tuned validator reaches 0.90, yet a geometry-only classifier reaches 0.93, exposing shortcuts. We propose to (H1) confirm learnability against strong baselines, (H2) remove shortcuts with a distribution-matched, adversarially filtered generator audited by scene-blind ceilings, (H3) \emph{generate} a per-predicate verdict and rejection reason behind a conformal false-accept guarantee, and (H4) test transfer to human sketches.
+Circle-and-arrow sketches tell a robot \emph{which} object to move and \emph{where} without naming anything, but existing sketch-conditioned systems execute the drawing unchecked. We study \textbf{sketch-prompt validation}---deciding \emph{before} any action whether a drawn instruction is correct, consistent across circle, arrow, and caption, and sufficient for a unique action, and saying why not---as an explicit pre-execution gate. A pilot by team members built a simulator-grounded generator over LIBERO (8,522 labelled prompts), collected 275 human sketches, and ran a 17-participant in-the-loop study: generated prompts rank validators like human sketches do but inflate AUROC by $+0.13$; a LoRA-adapted Qwen3-VL-4B staged over 82 human sketches reaches 0.808 AUROC, on par with 4-shot Gemini-3.8-Flash; yet live gating gave no detectable improvement, with in-loop precision 0.38 and no diagnostic in the rejection. We propose to (H1) match generated strokes to human statistics and audit geometry-only ceilings, (H2) \emph{generate} a per-channel verdict and rejection reason, (H3) calibrate the operating point with a conformal false-accept guarantee, and (H4) test channel-naming feedback and a one-retry cap in a follow-up study.
 \end{abstract}
 
 \section{Problem and Motivation}
 \label{sec:problem}
 
-Language is ambiguous in cluttered scenes with duplicate objects and goal images are over-specified \citep{sundaresan2024rtsketch}; a circle-and-arrow sketch with a name-free caption (``move this there'') is a persistent deictic act \citep{sauppe2014deictics,kranstedt2006deixis}. Recent systems condition robot policies on such sketches \citep{sundaresan2024rtsketch,gu2024rttrajectory,li2025crayonrobo,li2025rovi} and all silently assume the drawing is \emph{valid}. Yet circles miss or enclose a distractor, arrows point to the wrong container or detach from the circle, captions contradict sketches, and channels that look fine alone can jointly disagree; executing such a sketch commits the robot to the wrong action.
+Language is ambiguous in cluttered scenes with duplicate objects and goal images are over-specified \citep{sundaresan2024rtsketch}; a circle-and-arrow sketch with a name-free caption (``move this there'') is a persistent deictic act \citep{sauppe2014deictics,kranstedt2006deixis}. Recent systems condition robot policies on such sketches \citep{sundaresan2024rtsketch,gu2024rttrajectory,li2025crayonrobo,li2025rovi} and all silently assume the drawing is \emph{valid}. Yet circles miss or enclose a distractor, arrows point to the wrong container or detach from the circle, captions contradict sketches, and channels that look fine alone can jointly disagree; executing such a sketch commits the robot to a wrong action.
 
 \begin{figure}[b]
 \centering
-\includegraphics[width=0.72\textwidth]{figures/fig_overview.pdf}
-\caption{The pilot validator as a pre-execution trust gate \citep{drawvla2026pilot}: a LoRA-adapted VLM trained on simulator ground truth judges the marked image and caption; \accept{} executes, \reject{} asks the user to redraw.}
+\includegraphics[width=0.6\textwidth]{figures/fig_overview.pdf}
+\caption{The pilot validator as a pre-execution trust gate \citep{drawverify2026pilot}: a LoRA-adapted VLM trained on simulator ground truth judges the marked image and caption; \accept{} executes, \reject{} asks the user to redraw.}
 \label{fig:overview}
 \end{figure}
 
-\textbf{Problem (Track B).} \emph{Can a model decide, before any action, whether a drawn instruction is safe to execute---and say why not?} We formulate \textbf{sketch-prompt validation} as a decision over image, circle, arrow, and caption requiring per-channel correctness, cross-channel consistency, and sufficiency (\Secref{sec:formulation}), plus a generated reason; no existing task captures it (\Secref{sec:related}). We address it with generative VLMs as zero-shot judges and as LoRA-tuned validators (\Figref{fig:overview}).
+\textbf{Problem (Track B).} \emph{Can a model decide, before any action, whether a drawn instruction is safe to execute---and say why not?} We formulate \textbf{sketch-prompt validation} as a decision over image, circle, arrow, and caption requiring per-channel correctness, cross-channel consistency, and sufficiency (\Secref{sec:formulation}), plus a generated reason; no existing task captures it (\Secref{sec:related}). We address it with generative VLMs as prompted judges and as LoRA-tuned validators (\Figref{fig:overview}).
 
-\textbf{Pilot evidence and gap.} A pilot by team members \citep{drawvla2026pilot} built \dvv, a simulator-grounded generator over LIBERO \citep{liu2023libero} producing 37,970 labelled prompts across 40 tasks with no manual annotation. Frontier VLMs fail zero-shot (best 0.79 accuracy, 0.43 MCC; majority class 0.74) while SmolVLM-500M \citep{marafioti2025smolvlm} with LoRA \citep{hu2022lora} reaches 0.90 (Table~\ref{tab:pilot}, Appendix~\ref{app:details}); but a geometry-only classifier reaches 0.93, i.e., the generator leaks shortcuts \citep{geirhos2020shortcut}, and the pilot was single-seed with one zero-shot prompt and no ablations, human sketches, or explanations.
+\textbf{Pilot evidence and gap.} A pilot by team members \citep{drawverify2026pilot} built \dvv, a simulator-grounded generator over LIBERO \citep{liu2023libero}: 8,522 labelled prompts (31.8\% valid) from 800 demonstrations over 40 tasks, 15 of 18 corruption modes plus five grounding configurations, 275 human sketches (82 train / 193 test), and 326 sketches from a 17-participant in-the-loop study. Findings (Appendix~\ref{app:details}, \Figref{fig:evalsets}): (i)~generated prompts order seven API validators as human sketches do (Spearman $\rho=+0.93$) but inflate AUROC unevenly ($+0.13$ mean, $-0.06$ to $+0.25$); (ii)~Qwen3-VL-4B \citep{qwen3vl2025} with LoRA \citep{hu2022lora} trained on generated prompts alone transfers poorly (0.565 AUROC on human sketches) but staged over 82 human sketches reaches 0.808, matching 4-shot Gemini-3.8-Flash (0.857, n.s.); (iii)~live gating gave \emph{no detectable improvement}: in-loop precision 0.382, third attempts broke more than they repaired, and the rejection carried no diagnostic. The pilot never measured the human-likeness of generated strokes, never tested a per-channel verdict, set its threshold ad hoc, and ran one gated arm without feedback. This project delivers those deltas.
 
-\textbf{Hypotheses.} \textbf{H1 (learnability):} a $\le$1B LoRA-tuned VLM beats the best zero-shot VLM under its best prompt by $\ge$10 accuracy points and matches ($\pm$1 balanced-accuracy point) or exceeds a fine-tuned discriminative model of similar size, over 3 seeds. \textbf{H2 (shortcut removal):} on the hardened tier the multimodal validator keeps $\ge$0.80 balanced accuracy and exceeds both scene-blind ceilings (geometry-only, blank-canvas) on the audit split by $\ge$15 points. \textbf{H3 (structured supervision):} supervising the five validity predicates as auxiliary generative targets improves the directional and grounding slices (the pilot's weakest) by $\ge$3 points over binary-only training, and generated reasons name the violated predicate with $\ge$80\% faithfulness. \textbf{H4 (sim-to-human transfer):} validators trained with guarded imprecision augmentation lose $\le$10 balanced-accuracy points on human sketches; removing it widens the gap by $\ge$5 points. \textbf{Gate:} empirical test FAR at $\hat\tau$ (Eq.~\ref{eq:crc}) is $\le0.05$ in every seed on v1 and v2.
+\textbf{Hypotheses.} \textbf{H1 (hardening and transfer):} trained on the hardened tier alone, the validator reaches $\ge$0.70 AUROC on the 193 human test sketches (v1-only: 0.565), while a geometry-only classifier on that tier stays $\le$0.60 AUROC on an untouched audit split. \textbf{H2 (structured supervision):} supervising the five predicates as auxiliary generative targets lifts recall on directional failures of the human test split from 0.53 to $\ge$0.70 at no loss in $R_{\mathrm{val}}$, and generated reasons name the violated predicate with $\ge$80\% faithfulness on generated negatives and $\ge$70\% on human ones. \textbf{H3 (calibrated gate):} with $\hat\tau$ from Eq.~(\ref{eq:crc}), false-accept rate (FAR) on held-out human sketches is $\le\alpha=0.10$ in every seed, and at the pilot's recall (0.786) precision on ungated study sketches beats its 0.458 by $\ge$10 points. \textbf{H4 (feedback):} in a follow-up study ($\ge$20 participants), a gate that names the failing channel under a one-retry cap raises the validity of the finally sent instruction over the bare gate (pilot: 0.795) by $\ge$17 points, the pilot's minimum detectable effect.
 
 \section{Related Work}
 \label{sec:related}
 
-\textbf{Sketch- and visual-prompt-based instruction.} RT-Sketch and RT-Trajectory condition policies on goal or trajectory sketches \citep{sundaresan2024rtsketch,gu2024rttrajectory}, RoVI decodes an arrow/circle language with a VLM \citep{li2025rovi}, CrayonRobo \emph{tolerates} noisy prompts but does not classify them \citep{li2025crayonrobo}, Action-Sketcher and AnyUser translate sketches \citep{tan2026actionsketcher,yang2026anyuser}, and visual-prompting methods \citep{nasiriany2024pivot,yang2023som,liu2024moka,yuan2024robopoint,cai2024vipllava} annotate images so a VLM can ground spatial decisions. All assume the prompt is valid; \emph{we extend} them by making validity the primary decision.
+\textbf{Sketch- and visual-prompt-based instruction.} RT-Sketch and RT-Trajectory condition policies on goal or trajectory sketches \citep{sundaresan2024rtsketch,gu2024rttrajectory}, RoVI decodes an arrow/circle language with a VLM \citep{li2025rovi}, CrayonRobo \emph{tolerates} noisy prompts but does not classify them \citep{li2025crayonrobo}, and Action-Sketcher, AnyUser and visual-prompting methods \citep{tan2026actionsketcher,yang2026anyuser,nasiriany2024pivot,yang2023som,liu2024moka,yuan2024robopoint,cai2024vipllava} translate or annotate sketches for a VLM. All assume the prompt is valid; \emph{we extend} them by making validity the primary decision.
 
-\textbf{Verification and safety gating.} KnowNo asks for help via conformal prediction \citep{ren2023knowno}; VerifyLLM and VeriGraph verify plans against temporal logic or scene graphs \citep{sautenkov2025verifyllm,ekpo2024verigraph}; DoReMi and REFLECT detect or explain execution failures \citep{guo2024doremi,liu2023reflect}. These verify \emph{plans} or \emph{executions}; \emph{we contrast} by verifying the instruction itself, an earlier gate, with a conformal threshold \citep{angelopoulos2024conformalrisk,geifman2017selective}. \textbf{Shortcuts.} Hypothesis-only baselines \citep{gururangan2018artifacts}, AFLite \citep{lebras2020aflite} and dataset cartography \citep{swayamdipta2020cartography} expose or remove artefacts \citep{geirhos2020shortcut} in fixed datasets; \emph{we control the generator}.
+\textbf{Verification and safety gating.} KnowNo asks for help via conformal prediction \citep{ren2023knowno}; VerifyLLM and VeriGraph verify plans against temporal logic or scene graphs \citep{sautenkov2025verifyllm,ekpo2024verigraph}; DoReMi and REFLECT detect or explain execution failures \citep{guo2024doremi,liu2023reflect}. These verify \emph{plans} or \emph{executions}; \emph{we contrast} by verifying the instruction itself, an earlier gate, with a conformal threshold \citep{angelopoulos2024conformalrisk,geifman2017selective}. Shortcut audits \citep{gururangan2018artifacts,geirhos2020shortcut,swayamdipta2020cartography} filter fixed datasets; \emph{we control the generator}.
 
 \section{Task Formulation and Method Sketch}
 \label{sec:method}
 
 \subsection{Formulation}
 \label{sec:formulation}
-A sketch prompt is $P=(I,C,A,L)$: RGB observation $I$, circle $C$ (centre, radius) denoting \emph{which} object, arrow $A$ (tail, head) denoting \emph{where} it goes, and a name-free caption $L$. From simulator ground truth we define predicates $v_C$ (the circle uniquely and correctly selects the target), $v_A$ (correct bearing and magnitude, anchored on the circled object, ending in the intended region), $v_L$ (caption verb and implicit referents match the intended action), cross-modal consistency $v_X$ (all channels describe the same object, destination, and predicate), and sufficiency $v_S$ (the prompt determines a unique executable action). A prompt is valid iff $V(P)=v_C(P)\wedge v_A(P)\wedge v_L(P)\wedge v_X(P)\wedge v_S(P)$; the task is to learn $f_\theta(P)\in\{\accept,\reject\}$ predicting $V(P)$, with a reason on \reject. A prompt can pass every per-channel predicate yet be invalid because $v_X=0$ or $v_S=0$, so validation is not a set of independent checks.
+A sketch prompt is $P=(I,C,A,L)$: RGB observation $I$, circle $C$ (centre, radius) denoting \emph{which} object, arrow $A$ (tail, head) denoting \emph{where} it goes, and a name-free caption $L$. From simulator ground truth we define predicates $v_C$ (the circle uniquely selects the target), $v_A$ (correct bearing and magnitude, anchored on the circled object, ending in the intended region), $v_L$ (caption verb and implicit referents match the action), cross-modal consistency $v_X$ (all channels describe the same object, destination, and predicate), and sufficiency $v_S$ (a unique executable action). A prompt is valid iff $V(P)=v_C(P)\wedge v_A(P)\wedge v_L(P)\wedge v_X(P)\wedge v_S(P)$; the task is to learn $f_\theta(P)\in\{\accept,\reject\}$ predicting $V(P)$, with a reason on \reject. A prompt can pass every per-channel predicate yet fail $v_X$ or $v_S$, so validation is not a set of independent checks.
 
 \subsection{Simulator-grounded data generation and shortcut hardening}
 \label{sec:data}
-\textbf{Pilot pipeline (\Figref{fig:overview}; Appendix \Figref{fig:method}, top).} From LIBERO's object poses, region geometry, and gripper trajectories we extract the correct circle target and arrow endpoints for every frame with no human labelling. Valid prompts get \emph{guarded} human-imprecision augmentation (jitter, non-circular strokes, hand-like shafts), with in-point/out-point guards keeping the target inside the circle and distractors outside. Negatives apply one controlled corruption from four families (14 of 18 modes implemented; Appendix~\ref{app:taxonomy}) plus five grounding configurations, so every negative has a known mode, severity, and violated predicate.
+\textbf{Pilot pipeline (\Figref{fig:overview}; Appendix \Figref{fig:method}, top).} From LIBERO's object poses, region geometry, and gripper trajectories we extract the correct circle target and arrow endpoints for every frame with no human labelling. Valid prompts get \emph{guarded} human-imprecision augmentation (jitter, non-circular strokes, hand-like shafts), with in-point/out-point guards keeping the target inside the circle and distractors outside. Negatives apply one controlled corruption from four families (15 of 18 modes; Appendix~\ref{app:taxonomy}) plus five grounding configurations, so every negative has a known mode, severity, and violated predicate.
 
-\textbf{New: shortcut hardening (H2).} Let $g(P)$ be the raw geometry vector (circle centre and radius, arrow endpoints, length, bearing). (i)~\emph{Distribution matching}: negatives draw the same imprecision magnitudes as positives on the valid side of a guard, and corruptions that must cross a guard (near-miss, wrong magnitude) draw severities from the mirrored distribution just beyond it, so class-conditional marginals of $g$ overlap as far as labels allow. (ii)~\emph{Adversarial filtering} \citep{lebras2020aflite} on medium/hard modes only: we repeatedly train geometry-only gradient-boosted classifiers on random folds, score each example by how often held-out classifiers predict it confidently ($>0.75$), and remove the most predictable until geometry-only balanced accuracy on an \emph{untouched} audit split is $\le0.60$ or retention falls below 60\%. Because pixels can leak when coordinates do not, we also report a \emph{scene-blind} ceiling (sketches on a blank canvas).
+\textbf{New: shortcut hardening (H1).} Let $g(P)$ be the raw geometry vector (circle centre, radius, eccentricity; arrow endpoints, length, bearing, tail offset). (i)~\emph{Distribution matching to humans}: the pilot never compared generated and human strokes; we estimate the marginals of $g$ on the 82 human training sketches and importance-re-sample valid imprecision and corruption severities to match them as far as labels allow, guard-crossing modes (near-miss, wrong magnitude) drawing severities from the mirrored distribution just beyond the guard. (ii)~\emph{Adversarial filtering} \citep{lebras2020aflite} on medium/hard modes: we repeatedly train geometry-only gradient-boosted classifiers \citep{ke2017lightgbm} on random folds and remove the examples held-out classifiers predict most confidently until geometry-only AUROC on an \emph{untouched} audit split is $\le0.60$ or retention falls below 60\%. We also report a \emph{scene-blind} ceiling (sketches on a blank canvas).
 
 \subsection{Structured validator and conformal inference}
 \label{sec:validator}
-\textbf{Model.} A compact VLM (SmolVLM-256M/500M) with LoRA takes the image with the rendered sketch, the caption, and a fixed prompt and generates a \emph{structured verdict}: five predicate questions $q_k$, $k\in\{C,A,L,X,S\}$, answered sequentially with earlier answers in context (teacher-forced in training), then the \accept/\reject{} question $q_V$, then, on \reject, a one-sentence reason. Predicate labels are free: each negative violates a known subset and positives satisfy all.
+\textbf{Model.} Qwen3-VL-4B (and 2B) with LoRA (rank 32, as in the pilot) takes the image with the rendered sketch, the caption, and a fixed prompt and generates a \emph{structured verdict}: five predicate questions $q_k$, $k\in\{C,A,L,X,S\}$, answered sequentially with earlier answers in context (teacher-forced in training), then the \accept/\reject{} question $q_V$, then, on \reject, a one-sentence reason naming the failing channel. Training keeps the pilot's staged recipe (generated tier, then the 82 human sketches). Predicate labels are free: each generated negative violates a known subset and human negatives carry an annotator failure code.
 
-\textbf{Objective.} Each yes/no answer is scored by forced choice over its two answer tokens, $p_\theta(\text{yes}\mid P,q_k)=\sigma(z_{\text{yes}}-z_{\text{no}})$; the reason uses token-level cross-entropy $\ell_R$ on \reject{} examples against one of $\ge$3 paraphrased template reasons per mode (one held out). We minimise
+\textbf{Objective.} Each yes/no answer is scored by forced choice over its two answer tokens, $p_\theta(\text{yes}\mid P,q_k)=\sigma(z_{\text{yes}}-z_{\text{no}})$; the reason uses token-level cross-entropy $\ell_R$ on \reject{} examples against paraphrased template reasons per mode. We minimise
 \begin{equation}
 \mathcal{L}(\theta)=\ell_V(\theta)+\lambda\!\!\sum_{k\in\{C,A,L,X,S\}}\!\!\ell_k(\theta)+\mu\,\ell_R(\theta),\qquad
 \ell_k(\theta)=-\log p_\theta\big(y_k \mid P, q_k\big),
 \label{eq:loss}
 \end{equation}
-with $\lambda,\mu$ tuned on validation; $\lambda=\mu=0$ recovers the pilot's binary-only validator (ablation A1).
+with $\lambda,\mu$ tuned on validation; $\lambda=\mu=0$ recovers the pilot's answer-only validator (ablation A1).
 
-\textbf{Inference with a finite-sample false-accept guarantee.} Let $s(P)=p_\theta(\accept\mid P,q_V)$; we \accept{} iff $s(P)\ge\hat\tau$. False accepts (executing an invalid prompt) are the safety-critical error, so we bound the false-accept rate (FAR) by conformal risk control \citep{angelopoulos2024conformalrisk}: on the $n$ \emph{invalid} validation prompts let $\ell_i(\tau)=\mathbb{1}[s(P_i)\ge\tau]$ and
+\textbf{Inference with a finite-sample false-accept guarantee.} Let $s(P)=p_\theta(\accept\mid P,q_V)$, read from the \textsc{valid}/\textsc{wrong} token probabilities as in the pilot; we \accept{} iff $s(P)\ge\hat\tau$. False accepts are the safety-critical error, so we bound their rate by conformal risk control \citep{angelopoulos2024conformalrisk}: on the $n$ \emph{invalid} calibration sketches let $\ell_i(\tau)=\mathbb{1}[s(P_i)\ge\tau]$ and
 \begin{equation}
 \hat\tau=\inf\big\{\tau:\ \tfrac{1}{n+1}\textstyle\sum_{i=1}^{n}\ell_i(\tau)+\tfrac{1}{n+1}\le\alpha\big\}.
 \label{eq:crc}
 \end{equation}
-If invalid validation and test prompts are exchangeable, $\mathbb{E}[\mathrm{FAR}(\hat\tau)]\le\alpha$ ($\alpha=0.05$); we report the induced false-reject rate and empirical coverage across seeds, tiers, and the human set (where exchangeability is \emph{not} guaranteed).
+If calibration and test prompts are exchangeable, $\mathbb{E}[\mathrm{FAR}(\hat\tau)]\le\alpha$; with $n\approx35$ invalid calibration sketches $\alpha\ge1/(n{+}1)$, hence $\alpha=0.10$. We report the induced false-reject rate, precision at matched recall, and coverage across seeds, tiers, and study sketches (where exchangeability is \emph{not} guaranteed).
 
 \section{Datasets, Metrics, Baselines, and Experimental Plan}
 \label{sec:plan}
 
-\begin{figure}[t]
-\centering
-\begin{minipage}[c]{0.34\textwidth}\centering
-\includegraphics[width=\linewidth]{figures/fig_evalsets.pdf}
-\end{minipage}\hfill
-\begin{minipage}[c]{0.38\textwidth}\centering
-\includegraphics[width=\linewidth]{figures/fig_auroc.pdf}
-\end{minipage}
-\caption{Pilot evidence for the evaluation plan \citep{drawvla2026pilot}. \emph{Left:} three evaluation sources, one valid (top) and one invalid (bottom) prompt each: generated prompts with a known failure mode (C1), held-out human sketches (A5), and in-the-loop study sketches. \emph{Right:} AUROC of seven API validators on the three sources (95\% bootstrap intervals): generated prompts rank models like human sketches do but inflate absolute scores unevenly, motivating H2 and H4.}
-\label{fig:evalsets}
-\end{figure}
+\textbf{Datasets and licences.} (1)~\emph{LIBERO} \citep{liu2023libero} (MIT): 800 demonstrations, 40 tasks. (2)~\emph{\dvv{} v1} (pilot): 8,522 prompts---6,463 / 900 / 1,159 train / val / test, demo-disjoint, 68.2\% invalid (Appendix~\ref{app:taxonomy})---with image, coordinates, caption, label, and mode. (3)~\emph{v2 (hardened)}: same splits after matching and filtering ($\ge$60\% retention expected) plus the untouched audit split. (4)~\emph{Human sketches} (pilot; Appendix~\ref{app:details}): the 275-sketch corpus (157 valid / 118 invalid, task-disjoint 82 train / 193 test, annotator failure codes) and the 326 study sketches (88 ungated); the 82 training sketches double as calibration set. (5)~\emph{Follow-up study} (new; IRB exemption first): $\ge$20 adult volunteers, 21 trials each in three counterbalanced blocks (bare gate; channel-naming gate; with one-retry cap), with the pilot's interface and blind labelling deck. Data and adapters: CC~BY~4.0; code: MIT.
 
-\textbf{Datasets and licences.} (1)~\emph{LIBERO} \citep{liu2023libero} (MIT): 800 demonstrations, 40 tasks. (2)~\emph{\dvv{} v1} (pilot): 37,970 examples---30,302 / 3,702 / 3,966 train / val / test, demo-disjoint, 76\% negative (Appendix~\ref{app:taxonomy}). (3)~\emph{v2 (hardened)}: same splits after matching and filtering ($\ge$60\% retention expected) plus the untouched audit split. (4)~\emph{Human sketch test set} (evaluation only; IRB exemption first; cf.\ \Figref{fig:evalsets}): $\approx$10 adult volunteers each draw prompts on 30 demo-disjoint frames, 15 \emph{unprompted} and 15 \emph{deliberately wrong} ($\approx$300 sketches; no captions, so $v_L$/$v_X$ are out of scope); guards give labels, two members annotate blind. Data and adapters: CC~BY~4.0; code: MIT.
+\textbf{Metrics.} AUROC (invalid as positive class), accuracy, precision and recall on invalid prompts, $R_{\mathrm{val}}$ (recall on valid), MCC; FAR, FRR and precision at $\hat\tau$; recall per failure family and mode; geometry-only and scene-blind ceilings per tier; ranking agreement $\rho$ with human sets; reason faithfulness against the ground-truth predicate or annotator failure code (string match, Qwen3-8B judge); study outcomes as in the pilot: validity of the finally sent instruction, attempts per trial, fix/break counts (Wilson intervals).
 
-\textbf{Metrics.} Accuracy, balanced accuracy, macro-F1, MCC (74\% negative test set); FAR and FRR at $\hat\tau$ and FAR at FRR\,=\,10\%; per-family and per-mode slice accuracy; geometry-only and scene-blind ceilings per tier; the transfer gap $\Delta_{\text{human}}$ (balanced accuracy); reason faithfulness on true rejects against the ground-truth predicate and the model's own $\hat v$ (string match, Qwen3-8B judge); a 5-point usefulness rating of 50 reasons.
+\textbf{Baselines.} (i)~Majority class. (ii)~The pilot's seven API models (Gemini-3.8-Flash, GPT-5-mini, GPT-4.1-mini, Gemini-2.5-Flash, Claude-Haiku-4.5, GPT-5-nano, Claude-3-Haiku) under the identical 4-shot prompt, cached outputs reused. (iii)~Zero-shot Qwen3-VL-2B/4B. (iv)~Geometry-only LightGBM fits and the scene-blind validator as ceilings. (v)~A fine-tuned discriminative model (ConvNeXt-T, late fusion of $g(P)$ and a caption embedding). (vi)~The pilot's staged validators, rationale (0.808 AUROC) and answer-only (0.841). \emph{Ours:} structured validator with the conformal gate.
 
-
-\textbf{Baselines.} (i)~Majority class. (ii)~Zero-shot open VLMs Qwen3-VL-2B/4B/8B \citep{qwen3vl2025} and (iii)~closed APIs (Gemini 3.7 Flash, Claude Haiku 4.5/Sonnet 4.6), pinned and cached, each under its best of four prompt styles (direct, chain-of-thought, 4-shot, coordinates-as-text) chosen on a 500-example validation subset. (iv)~Geometry-only gradient boosting \citep{ke2017lightgbm} and the scene-blind validator as ceilings. (v)~A fine-tuned discriminative model of similar size (ConvNeXt-T, late fusion of $g(P)$ and a caption embedding). (vi)~The pilot's binary-only SmolVLM+LoRA. \emph{Ours:} structured SmolVLM+LoRA with the conformal gate.
-
-\textbf{Ablations ($\ge$3), sensitivity, statistics.} A1: structured (+reason) vs.\ binary-only ($\lambda=\mu=0$; H3). A2: train on v2 vs.\ v1, test on both tiers (H2). A3: modality (no caption; coordinates-as-text; scene-blind). A4: no guarded-imprecision augmentation (H4). A5: prompt-only vs.\ LoRA. A6: backbone 256M/500M/2.2B. Sensitivity: training-set size, LoRA rank, $\tau$, corruption severity. All trained models use 3 seeds (mean$\pm$std); McNemar's test \citep{dietterich1998tests} on seed-matched predictions, paired-bootstrap 95\% CIs, minimum detectable effects per slice.
+\textbf{Ablations ($\ge$3), sensitivity, statistics.} A1: structured vs.\ answer-only vs.\ free rationale ($\lambda=\mu=0$; H2). A2: v2 vs.\ v1, with and without the human stage (H1). A3: modality (no caption; coordinates-as-text; scene-blind). A4: no guarded augmentation. A5: calibration set 40 vs.\ 82 and $\alpha\in\{0.05,0.10,0.20\}$ (H3). A6: backbone Qwen3-VL-2B/4B, Qwen2-VL-2B. Sensitivity: training-set size, LoRA rank, corruption severity. 3 seeds (mean$\pm$std); paired bootstrap (2,000 resamples) for AUROC differences, McNemar's test \citep{dietterich1998tests} on seed-matched decisions, Williams' test for dependent $\rho$, minimum detectable effects per slice and for the study.
 
 \section{Risks, Resources, and Team Plan}
 \label{sec:risks}
-\textbf{Risks and mitigations.} \textbf{Hardening over-removes or still leaks:} per-mode retention curves, removal capped at 40\%, both tiers released. \textbf{Small human set; guard label noise:} evaluation-only probe with bootstrap CIs; blind audit of 200+200 examples, flagging modes with agreement $<0.8$. \textbf{API drift, cost, compute:} pinned versions, cached pilot outputs, Qwen3-VL primary, ablations on the 256M model; $\approx$160 GPU-h on one A100/4090 plus $\approx$USD~100--150 of API calls. \textbf{Schedule:} go/no-go 25 Oct---if the v2 ceiling is still $\ge0.75$ at 60\% retention we report v1 plus the best partial tier and shift effort to H3/H4. \textbf{Over-claiming safety:} the gate reduces, not eliminates, unsafe executions; no closed-loop control is run.
+\textbf{Risks and mitigations.} \textbf{Hardening over-removes or still leaks:} per-mode retention curves, removal capped at 40\%, both tiers released. \textbf{Small human sets:} 35 invalid calibration and 82 invalid test sketches; every human-set claim carries bootstrap CIs. \textbf{Study power:} the pilot's minimum detectable effect was 17 points with 12 participants; we recruit $\ge$20, within-participant, and replay logged attempts under the one-retry cap. \textbf{API drift, cost, compute:} pinned versions, cached pilot outputs; $\approx$2 GPU-h per Qwen3-VL-4B run (estimated from the pilot's 2-epoch stage), $\approx$45 runs $\approx$100 GPU-h on one A100/4090, $\approx$USD~100--150 of API calls. \textbf{Schedule:} go/no-go 25 Oct---if the v2 ceiling is still $\ge0.75$ at 60\% retention we report the best partial tier and shift effort to H2--H4. \textbf{Over-claiming safety:} the gate reduces, not eliminates, unsafe executions; nothing is executed on a robot.
 
-\textbf{Roles and timeline (2026).} \emph{Member~1 (data):} generator v2, hardening, audit, release. \emph{Member~2 (modelling):} structured objective, reasons, gate, LoRA training, ablations. \emph{Member~3 (evaluation):} API baselines, statistics, human study, ethics. \emph{1--11 Oct:} IRB, recruitment. \emph{12--25 Oct:} generator v2, 3-seed re-run with stronger baselines (H1), validator and gate, A1--A3; go/no-go. \emph{26 Oct--8 Nov:} human study (H4), A4--A6, sensitivity, statistics. \emph{9--12 Nov:} final presentation ($\ge$90\% of results); \emph{13--27 Nov:} final report and artifacts.
+\textbf{Roles and timeline (2026).} \emph{Member~1 (data):} generator v2, matching, audit, release. \emph{Member~2 (modelling):} structured objective, reasons, gate, LoRA training, ablations. \emph{Member~3 (evaluation):} API baselines, statistics, follow-up study, ethics. \emph{1--11 Oct:} IRB, recruitment, feedback interface. \emph{12--25 Oct:} generator v2, structured validator and gate, A1--A3; go/no-go. \emph{26 Oct--8 Nov:} follow-up study (H4), A4--A6, statistics. \emph{9--12 Nov:} final presentation ($\ge$90\% of results); \emph{13--27 Nov:} final report and artifacts.
 
 \subsection*{Ethics and reproducibility statements}
-Training data are simulator renders with no people or personal data; the sketch study uses consenting adult volunteers and stores only drawings and anonymous ratings. A false accept could cause a wrong physical action, so we report false-accept rates with confidence intervals and recommend human confirmation at deployment. Licences: LIBERO (MIT), SmolVLM/Qwen3-VL (Apache-2.0), API terms of service; we release data and adapters under CC~BY~4.0 and code under MIT: generator, training and evaluation code with seeds, cached API outputs, LoRA adapters ($<$2\,GB), both tiers with checksums, and compute logs.
+Training data are simulator renders with no people or personal data; both sketch studies use consenting adult volunteers and store only drawings, prompts, and anonymous ratings. A false accept could cause a wrong physical action, so we report false-accept rates with confidence intervals and recommend human confirmation at deployment. Licences: LIBERO (MIT), Qwen (Apache-2.0), API terms; we release data and adapters under CC~BY~4.0 and code under MIT, with seeds, cached API outputs, both tiers with checksums, and study and compute logs.
 
 \bibliography{proposal}
 \bibliographystyle{iclr2027_conference}
@@ -156,112 +142,143 @@ Training data are simulator renders with no people or personal data; the sketch 
 \node[data, right=of demos] (gt) {Ground-truth extraction\\object pose, region,\\gripper trajectory};
 \node[data, right=of gt] (valid) {Valid-prompt renderer\\guarded imprecision\\(in/out-point guards)};
 \node[data, right=of valid] (neg) {Counterfactual corruption\\4 families + 5 grounding\\configs; known predicate};
-\node[new, right=of neg] (hard) {\textbf{Shortcut hardening}\\matching + AFLite filtering;\\geometry \& scene-blind ceilings};
+\node[new, right=of neg] (hard) {\textbf{Shortcut hardening}\\matching to human strokes\\+ AFLite filtering;\\geometry \& scene-blind ceilings};
 \draw[arr] (demos) -- (gt); \draw[arr] (gt) -- (valid); \draw[arr] (valid) -- (neg); \draw[arr] (neg) -- (hard);
 \node[data, below=0.9cm of gt] (prompt) {Prompt $P=(I,C,A,L)$\\image + circle + arrow\\+ ``move this there''};
-\node[model, right=of prompt] (vlm) {SmolVLM + LoRA\\\textbf{structured verdict}\\{\tiny $\hat v_C,\hat v_A,\hat v_L,\hat v_X,\hat v_S\!\to\!\hat V\!\to$ reason}};
+\node[model, right=of prompt] (vlm) {Qwen3-VL + LoRA\\\textbf{structured verdict}\\{\tiny $\hat v_C,\hat v_A,\hat v_L,\hat v_X,\hat v_S\!\to\!\hat V\!\to$ reason}};
 \node[new, right=of vlm] (gate) {\textbf{Conformal gate}\\$\accept$ iff $s(P)\ge\hat\tau$\\$\mathbb{E}[\mathrm{FAR}]\le\alpha$ (Eq.~\ref{eq:crc})};
-\node[box, right=of gate] (out) {$\accept\to$ policy\\$\reject\to$ ask user\\with generated reason};
+\node[box, right=of gate] (out) {$\accept\to$ policy\\$\reject\to$ ask user,\\naming the failing channel};
 \draw[arr] (prompt) -- (vlm); \draw[arr] (vlm) -- (gate); \draw[arr] (gate) -- (out);
-\draw[arr] (hard.south) |- node[pos=0.72, fill=white, inner sep=1.5pt]{labelled dataset: v1 (pilot, 37,970 ex.) and v2 (hardened); demo-disjoint splits} ($(prompt.north)+(0,0.45)$) -- (prompt.north);
+\draw[arr] (hard.south) |- node[pos=0.72, fill=white, inner sep=1.5pt]{labelled dataset: v1 (pilot, 8,522 ex.) and v2 (hardened); demo-disjoint splits; staged with 82 human sketches} ($(prompt.north)+(0,0.45)$) -- (prompt.north);
 \end{tikzpicture}}
 \caption{Method sketch (referenced from \Secref{sec:data}). \emph{Top:} simulator-grounded data generation (green = new). \emph{Bottom:} the validator generates a structured verdict and a reason; a conformal threshold yields an execute/ask decision.}
 \label{fig:method}
 \end{figure}
 
 \begin{table}[H]
-\caption{Failure taxonomy. Difficulty: E(asy)/M(edium)/H(ard). Each mode has a controlled generation mechanism and maps to the predicate(s) it violates. Of the 18 corruption modes listed, 14 are implemented in the pilot release; the remaining four are scheduled for v2.}
-% TODO: mark which four modes are not yet implemented (the pilot manuscript reports 14 implemented modes but lists 18).
+\caption{Failure taxonomy of the pilot release. Families A--D define 18 corruption modes, of which 15 are instantiated (Cov.\ \checkmark); C2, D1, D2 are unreachable under name-free captions (N/A) and become reachable in v2 through a named-caption slice. The Grounding family is counted separately. Mode IDs are the generator's keys and are non-contiguous.}
 \label{tab:taxonomy}
 \begin{center}
 \scriptsize
-\begin{tabular}{@{}p{2.0cm}p{2.9cm}p{7.1cm}c@{}}
+\begin{tabular}{@{}p{2.3cm}lp{7.6cm}c@{}}
 \toprule
-Family & Mode & Description and generation mechanism & Diff. \\
+Family & ID & Mode and generation mechanism & Cov. \\
 \midrule
-Referential (circle / ``which''; $v_C$) & Wrong-category object & Circle a clearly different object (e.g., plate, stove) than the target. & E \\
- & Near-miss circle & Offset the centre so the target falls outside or only grazes the circle; severity varies continuously with offset. & H \\
- & Empty-region circle & Circle bare table or background containing no object. & E \\
- & Multi-object enclosure & Inflate the radius to enclose the target \emph{and} a distractor, making the referent unresolvable (tests $v_S$). & H \\
- & Degenerate size & Dot-sized or whole-frame circle that selects nothing meaningful. & E \\
+Referential (circle / ``which''; $v_C$) & A2 & Wrong-category object: circle a clearly different object than the target. & \checkmark \\
+ & A3 & Near-miss circle: offset the centre so the target falls outside or only grazes the circle. & \checkmark \\
+ & A4 & Empty-region circle: circle bare table or background. & \checkmark \\
+ & A5 & Multi-object enclosure: inflate the radius to enclose the target and a distractor (tests $v_S$). & \checkmark \\
+ & A6 & Degenerate size: dot-sized or whole-frame circle. & \checkmark \\
 \midrule
-Directional (arrow / ``where''; $v_A$) & Wrong destination & Retarget the arrow head to a different container or region. & H \\
- & Wrong magnitude & Correct bearing but arrow far too short or overshooting. & H \\
- & Wrong bearing & Correct length but head rotated $90^\circ$/$180^\circ$. & M \\
- & Null destination & Head on empty table or off-frame. & E \\
- & Detached tail & Shaft plausible but tail not anchored on the circled object. & H \\
- & Spec mismatch & Arrow present on a circle-only task, or missing on a place task. & H \\
+Directional (arrow / ``where''; $v_A$) & B1 & Wrong destination: retarget the head to a different container or region. & \checkmark \\
+ & B3 & Wrong magnitude: correct bearing, arrow far too short or overshooting. & \checkmark \\
+ & B4 & Wrong bearing: correct length, head rotated $90^\circ$/$180^\circ$. & \checkmark \\
+ & B5 & Null destination: head on empty table or off-frame. & \checkmark \\
+ & B6 & Detached tail: shaft plausible but tail not anchored on the circled object. & \checkmark \\
+ & B7 & Spec mismatch: arrow present on a circle-only task, or missing on a place task. & \checkmark \\
 \midrule
-Cross-modal (channels disagree; $v_X$) & Circle--arrow mismatch & Circle object A while the arrow originates from object B. & H \\
- & Caption--sketch mismatch & Correct sketch, but caption swapped from another demo/task. & H \\
- & Predicate mismatch & Caption says ``open the cabinet'' while the sketch is a place-style circle+arrow. & M \\
+Cross-modal ($v_X$) & C1 & Circle--arrow mismatch: circle object A while the arrow originates from object B. & \checkmark \\
+ & C2 & Caption--sketch mismatch: correct sketch, caption swapped from another task. & N/A \\
+ & C3 & Predicate mismatch: caption says ``open the cabinet'' while the sketch is a place-style circle+arrow. & \checkmark \\
 \midrule
-Language (caption / ``what''; $v_L$) & Wrong target noun & Caption names the wrong object. & M \\
- & Wrong destination noun & Caption names the wrong destination. & E \\
- & Wrong verb & Caption verb wrong (pick vs.\ push vs.\ open). & M \\
- & Under-determined & ``Put this there'': valid with a good sketch, invalid with a bad one. & H \\
+Language (caption / ``what''; $v_L$) & D1 & Wrong target noun. & N/A \\
+ & D2 & Wrong destination noun. & N/A \\
+ & D3 & Wrong verb (pick vs.\ push vs.\ open). & \checkmark \\
+ & D4 & Under-determined caption: ``put this there'', valid with a good sketch, invalid with a bad one. & \checkmark \\
 \midrule
-Grounding ($v_S$) & Five configurations & Fully resolved prompt; no sketch; open destination; identical referents; arrow between destinations. & M--H \\
-\midrule
-Physical (deferred) & Occluded target & Circle a target not visible in the frame (needs depth); generator yielded only 18 rows in the pilot. & M \\
+Grounding ($v_S$) & -- & Five configurations: resolved; no sketch; open destination; twin referents; arrow between destinations. & \checkmark \\
 \bottomrule
 \end{tabular}
 \end{center}
 \end{table}
 
 \begin{table}[H]
-\caption{\dvv{} v1 composition by family (train / validation / test).}
+\caption{\dvv{} v1 composition by label (train / validation / test). Percentages are shares within a split; the label balance is held constant across splits, and no demonstration contributes frames to more than one split.}
 \label{tab:composition}
 \begin{center}
 \small
-\begin{tabular}{lrrr}
+\begin{tabular}{lrrrr}
 \toprule
-Family & Train & Val & Test \\
+Label & Train & Val & Test & Total \\
 \midrule
-Referential & 6,354 & 766 & 834 \\
-Directional & 7,338 & 904 & 958 \\
-Cross-modal & 1,212 & 150 & 158 \\
-Language & 2,556 & 308 & 336 \\
-Grounding & 5,648 & 695 & 655 \\
-Positive & 7,194 & 879 & 1,025 \\
+Valid & 2,057 (31.8\%) & 285 (31.7\%) & 366 (31.6\%) & 2,708 (31.8\%) \\
+Invalid & 4,406 (68.2\%) & 615 (68.3\%) & 793 (68.4\%) & 5,814 (68.2\%) \\
 \midrule
-Total & 30,302 & 3,702 & 3,966 \\
+Total & 6,463 & 900 & 1,159 & 8,522 \\
 \bottomrule
 \end{tabular}
 \end{center}
 \end{table}
 
-\section{Pilot Results, Training Details, and Zero-shot Protocol}
+\section{Pilot Results, Training Details, and Protocols}
 \label{app:details}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.55\textwidth]{figures/fig_auroc.pdf}
+\caption{Pilot evidence (referenced from \Secref{sec:plan}): AUROC of seven API validators on generated prompts, the human test split and the in-the-loop study (95\% bootstrap intervals). Generated prompts rank models like human sketches do but inflate absolute scores unevenly, motivating H1 and H3.}
+\label{fig:evalsets}
+\end{figure}
+
 \begin{table}[H]
-\caption{Pilot results on the 3,966-example v1 test set (single seed; zero-shot rows use one direct prompt; the test set is 74\% negative). $^\dagger$Shortcut ceiling from raw coordinates only.}
-\label{tab:pilot}
+\caption{Pilot: seven API models under the identical 4-shot prompt on generated prompts (Gen., $n=300$, 60.0\% invalid), the human test split (Test, $n=193$, 42.5\% invalid) and the in-the-loop study (Study, $n=326$, 23.6\% invalid). The last rows give each human set's Spearman agreement with the generated ranking and the fraction of the 21 model pairs whose order is preserved.}
+\label{tab:api}
 \begin{center}
 \small
-\begin{tabular}{lcccc}
+\begin{tabular}{lcccccc}
 \toprule
-Model & Acc & BAcc & Macro-F1 & MCC \\
+ & \multicolumn{3}{c}{AUROC} & \multicolumn{3}{c}{MCC} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+Model & Gen. & Test & Study & Gen. & Test & Study \\
 \midrule
-Majority class (always \reject) & 0.74 & 0.50 & 0.43 & 0.00 \\
-Qwen3-VL-2B (zero-shot, open) & 0.32 & 0.54 & 0.30 & 0.13 \\
-Qwen3-VL-4B (zero-shot, open) & 0.46 & 0.61 & 0.46 & 0.22 \\
-Claude Sonnet 4.6 (zero-shot, API) & 0.67 & 0.59 & 0.59 & 0.18 \\
-Claude Haiku 4.5 (zero-shot, API) & 0.73 & 0.50 & 0.44 & 0.01 \\
-Gemini 3.7 Flash (zero-shot, API) & 0.79 & 0.71 & 0.71 & 0.43 \\
-SmolVLM-256M + LoRA (binary-only) & 0.89 & 0.83 & 0.84 & 0.69 \\
-SmolVLM-500M + LoRA (binary-only) & \textbf{0.90} & \textbf{0.84} & \textbf{0.86} & \textbf{0.72} \\
+Gemini-3.8-Flash & \textbf{0.965} & \textbf{0.857} & \textbf{0.768} & $+0.85$ & $+0.50$ & $+0.43$ \\
+GPT-5-mini & 0.928 & 0.687 & 0.631 & $+0.82$ & $+0.24$ & $+0.25$ \\
+GPT-4.1-mini & 0.836 & 0.691 & 0.569 & $+0.64$ & $+0.24$ & $+0.15$ \\
+Gemini-2.5-Flash & 0.818 & 0.640 & 0.664 & $+0.65$ & $+0.29$ & $+0.25$ \\
+Claude-Haiku-4.5 & 0.812 & 0.567 & 0.642 & $+0.61$ & $+0.10$ & $+0.27$ \\
+GPT-5-nano & 0.630 & 0.591 & 0.558 & $+0.31$ & $+0.26$ & $+0.10$ \\
+Claude-3-Haiku & 0.482 & 0.533 & 0.526 & $-0.03$ & $+0.07$ & $+0.10$ \\
 \midrule
-Geometry-only HGB$^\dagger$ & 0.93 & 0.91 & 0.91 & -- \\
+Mean & 0.782 & 0.652 & 0.623 & $+0.55$ & $+0.24$ & $+0.22$ \\
+$\rho$ vs.\ Gen. & & $+0.93$ & $+0.71$ & & $+0.71$ & $+0.75$ \\
+Pairs preserved & & 19/21 & 17/21 & & 17/21 & 17/21 \\
 \bottomrule
 \end{tabular}
 \end{center}
 \end{table}
 
-\textbf{Fine-tuning.} SmolVLM-256M and -500M with LoRA rank 16, $\alpha=32$, dropout 0.05, 3 epochs, batch size 64, learning rate $10^{-4}$ with cosine schedule and 3\% warm-up. Decisions are read by forced-choice scoring over the \textsc{right}/\textsc{wrong} answer tokens rather than free-form generation. The pilot adapters were trained on an earlier 34,018-row release that contained 14 physical-family negatives; all reported metrics are computed on the identical 3,966-row physical-free test set, and the proposed runs will retrain on the physical-free data.
+\begin{table}[H]
+\caption{Pilot: fine-tuned validators against Gemini-3.8-Flash on the human test split ($n=193$, 42.5\% invalid). Positive class is \textsc{invalid}; Prec and Rec are on invalid prompts, $R_{\mathrm{val}}$ is recall on valid ones. $\Delta$ is the paired AUROC difference to Gemini-3.8-Flash, $^*$ marking a 95\% bootstrap interval excluding zero. ``gen$\to$hum'' is the staged recipe; decisions are the generated verdict.}
+\label{tab:pilot}
+\begin{center}
+\footnotesize
+\begin{tabular}{lccccccc}
+\toprule
+Model & Acc & Prec & Rec & MCC & $R_{\mathrm{val}}$ & AUROC & $\Delta$ \\
+\midrule
+Gemini-3.8-Flash (4-shot) & 0.699 & 0.590 & 0.963 & $+0.50$ & 0.505 & 0.857 & \\
+Qwen3-VL-4B zero-shot & 0.585 & 0.600 & 0.073 & $+0.08$ & 0.964 & 0.542 & $-0.32^*$ \\
+Qwen3-VL-4B generated only & 0.653 & 0.559 & 0.866 & $+0.38$ & 0.495 & 0.565 & $-0.29^*$ \\
+Qwen3-VL-4B human only (82) & 0.627 & 0.561 & 0.561 & $+0.24$ & 0.676 & 0.640 & $-0.22^*$ \\
+Qwen3-VL-4B mixed (pooled) & 0.684 & 0.598 & 0.780 & $+0.39$ & 0.613 & 0.754 & $-0.10^*$ \\
+Qwen3-VL-4B gen$\to$hum & 0.798 & 0.779 & 0.732 & $+0.58$ & 0.847 & 0.808 & $-0.05$ \\
+\quad answer-only & 0.808 & 0.817 & 0.707 & $+0.61$ & 0.883 & 0.841 & $-0.02$ \\
+\quad 40 human sketches & 0.782 & 0.900 & 0.549 & $+0.57$ & 0.955 & 0.847 & $-0.01$ \\
+Qwen3-VL-2B gen$\to$hum & 0.762 & 0.757 & 0.646 & $+0.51$ & 0.847 & 0.779 & $-0.08^*$ \\
+Qwen2-VL-2B gen$\to$hum & 0.741 & 0.767 & 0.561 & $+0.46$ & 0.874 & 0.720 & $-0.14^*$ \\
+\midrule
+Geometry-only LightGBM (gen.\ fit) & -- & -- & -- & -- & -- & 0.741 & $^*$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{table}
 
-\textbf{Zero-shot protocol.} Each VLM receives the rendered image and a fixed prompt that explains the circle/arrow/caption semantics, states the three validity conditions (correct, consistent, sufficient), and asks for a single-word \textsc{right}/\textsc{wrong} answer; the identical prompt is used for open and closed models.
+\textbf{Fine-tuning (pilot recipe).} LoRA rank 32, $\alpha=64$, dropout 0.05 on the query, key, value and output projections and the gate, up and down MLP projections (0.93\% of Qwen3-VL-4B's parameters). Stage~1: 2 epochs on the generated tier, effective batch 16, learning rate $10^{-4}$ with cosine schedule and 30 warm-up steps (AdamW, no weight decay, gradient clipping 1.0). Stage~2: 4 epochs on the 82 human training sketches, batch 8, learning rate $3\times10^{-5}$. Images $512{\times}512$; loss on the assistant turn only. At inference the model generates its reasoning greedily; the prefix up to \texttt{<answer>} is forced and the decision and AUROC score are read from the relative probabilities of the \textsc{valid}/\textsc{wrong} tokens. Seeds: $0.810\pm0.003$ AUROC for the staged 4B model.
 
-\textbf{Pilot error profile.} SmolVLM-500M makes 415 test errors: 122 false accepts and 293 false rejects. The weakest slices are arrow-between-destinations (83.1\% correct rejection), wrong destination (88.0\%), wrong magnitude (89.9\%), and near-miss circle (91.7\%)---exactly the geometrically subtle modes, which motivates H3.
+\textbf{API protocol.} The same system prompt, the same four in-context examples drawn from the human training split, temperature 0, and a request for a label and a failure probability $p_{\mathrm{fail}}\in[0,100]$, from which AUROC is computed with invalid as the positive class. Unparsable replies are dropped (6, 4 and 20 for GPT-5-nano on the three sets; none for any other model).
+
+\textbf{Human data.} Ungated corpus: 11 participants, 275 sketches over two rounds covering 34 tasks across the four LIBERO suites; median drawing time 8.2\,s; each sketch labelled valid/invalid by human annotators independently of any model, invalid ones with a failure code from the taxonomy; task-disjoint split 82 train / 193 test. In-the-loop study: 17 participants, 21 trials each in three blocks (no gate, model gate, control gate rejecting on the ground-truth geometry of the original annotation); 250 analysed trials, 326 labelled sketches. Outcomes: validity of the finally sent instruction 0.841 (no gate), 0.795 (model gate, 1.38 attempts/trial), 0.726 (control gate); the model gate's in-loop precision 0.382 and recall 0.500; trials accepted at the second attempt were only repaired (6/0), trials that reached a third broke more than they repaired (6 broken / 2 repaired); of six third-attempt breaks, five changed the prompt rather than the drawing. Replaying the logs with a one-retry cap gives 0.821 (model) and 0.762 (control).
+
+\textbf{Pilot error profile.} On the human test split the staged 4B validator's recall on invalid prompts by family is 0.80 (referential), 0.53 (directional) and 0.77 (cross-modal and grounding) against 0.96 / 0.95 / 1.00 for Gemini-3.8-Flash, which buys that recall by rejecting half of the valid sketches ($R_{\mathrm{val}}=0.505$). Directional failures are the weakest slice, which motivates H2; geometry-only fits reach 0.741 AUROC on the human test split but only 0.50--0.56 on study sketches, all significantly below Gemini-3.8-Flash.
 
 \end{document}

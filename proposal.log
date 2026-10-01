@@ -538,7 +538,7 @@ Package: enumitem 2019/06/20 v3.9 Customized lists
 \enit@count@id=\count312
 \enitdp@description=\count313
 )
-LaTeX Font Info:    Trying to load font information for T1+ptm on input line 36
+LaTeX Font Info:    Trying to load font information for T1+ptm on input line 35
 .
  (t1ptm.fd
 File: t1ptm.fd 2001/06/04 font definitions for T1/ptm.
@@ -556,32 +556,32 @@ File: l3backend-xetex.def 2022-02-07 L3 backend support: XeTeX
 (proposal.aux)
 \openout1 = `proposal.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 36.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 35.
+LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 35.
+LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 35.
+LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 35.
+LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 35.
 LaTeX Font Info:    Trying to load font information for TS1+cmr on input line 3
-6.
+5.
  (ts1cmr.fd
 File: ts1cmr.fd 2019/12/16 v2.5j Standard LaTeX font definitions
 )
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-Package hyperref Info: Link coloring OFF on input line 36.
+LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 35.
+LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 35.
+LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 35.
+LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 35.
+LaTeX Font Info:    ... okay on input line 35.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 35.
+LaTeX Font Info:    ... okay on input line 35.
+Package hyperref Info: Link coloring OFF on input line 35.
  (nameref.sty
 Package: nameref 2021-04-02 v2.47 Cross-referencing by name of section
  (refcount.sty
@@ -591,30 +591,30 @@ Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
 )
 \c@section@level=\count321
 )
-LaTeX Info: Redefining \ref on input line 36.
-LaTeX Info: Redefining \pageref on input line 36.
-LaTeX Info: Redefining \nameref on input line 36.
+LaTeX Info: Redefining \ref on input line 35.
+LaTeX Info: Redefining \pageref on input line 35.
+LaTeX Info: Redefining \nameref on input line 35.
 
 (proposal.out) (proposal.out)
 \@outlinefile=\write4
 \openout4 = `proposal.out'.
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 39.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 38.
 
  (umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 39.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 38.
 
  (umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
 )
-LaTeX Font Info:    Trying to load font information for T1+pcr on input line 39
+LaTeX Font Info:    Trying to load font information for T1+pcr on input line 38
 .
  (t1pcr.fd
 File: t1pcr.fd 2001/06/04 font definitions for T1/pcr.
 )
-Overfull \hbox (4.51503pt too wide) in paragraph at lines 39--39
+Overfull \hbox (4.51503pt too wide) in paragraph at lines 38--38
 [][] 
  []
 
@@ -622,13 +622,26 @@ File: figures/fig_overview.pdf Graphic file (type pdf)
 <use figures/fig_overview.pdf>
 [1
 
-] [2]
-File: figures/fig_evalsets.pdf Graphic file (type pdf)
-<use figures/fig_evalsets.pdf>
+] [2] [3] (proposal.bbl [4] [5] [6])
+Underfull \hbox (badness 10000) in paragraph at lines 167--167
+[]|\T1/ptm/m/n/7 Referential (cir-cle /
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 173--173
+[]|\T1/ptm/m/n/7 Directional (ar-row /
+ []
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 184--184
+[]|\T1/ptm/m/n/7 Language (cap-tion /
+ []
+
+[7]
 File: figures/fig_auroc.pdf Graphic file (type pdf)
 <use figures/fig_auroc.pdf>
- [3] (proposal.bbl [4] [5] [6]) [7] [8] [9] (proposal.aux)
+ [8] [9] (proposal.aux)
 Package rerunfilecheck Info: File `proposal.out' has not changed.
-(rerunfilecheck)             Checksum: 9A10054ED384FB973F139F23A880B516;2365.
+(rerunfilecheck)             Checksum: F96D2B4E2241F5A3CD2B939CA5985248;2317.
  )
-Output written on proposal.xdv (9 pages, 78316 bytes).
+Output written on proposal.xdv (9 pages, 82924 bytes).
