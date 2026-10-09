@@ -24,7 +24,6 @@
 
 \title{DrawVerify: Validating Sketched \\ Robot Instructions Before Execution}
 
-% TODO: replace the placeholder names/e-mails below with the team members' details.
 \author{Duc Anh Do, Tran Huu Loc \& Nhat Minh Nguyen \thanks{CS707 Group Project Proposal, Track~B (novel task formulation).} \\
 School of Computing and Information Systems \\
 Singapore Management University \\
@@ -56,7 +55,7 @@ Language is ambiguous in cluttered scenes with duplicate objects and goal images
 
 \textbf{Problem (Track B).} \emph{Can a model decide, before any action, whether a drawn instruction is safe to execute---and say why not?} We formulate \textbf{sketch-prompt validation} as a decision over image, circle, arrow, and caption requiring per-channel correctness, cross-channel consistency, and sufficiency (\Secref{sec:formulation}), plus a generated reason; no existing task captures it (\Secref{sec:related}). We address it with generative VLMs as prompted judges and as LoRA-tuned validators (\Figref{fig:overview}).
 
-\textbf{Pilot evidence and gap.} A pilot by team members \citep{drawverify2026pilot} built \dvv, a simulator-grounded generator over LIBERO \citep{liu2023libero}: 8,522 labelled prompts (31.8\% valid) from 800 demonstrations over 40 tasks, 15 of 18 corruption modes plus five grounding configurations, 275 human sketches (82 train / 193 test), and 326 sketches from a 17-participant in-the-loop study. Findings (Appendix~\ref{app:details}, \Figref{fig:evalsets}): (i)~generated prompts order seven API validators as human sketches do (Spearman $\rho=+0.93$) but inflate AUROC unevenly ($+0.13$ mean, $-0.06$ to $+0.25$); (ii)~Qwen3-VL-4B \citep{qwen3vl2025} with LoRA \citep{hu2022lora} trained on generated prompts alone transfers poorly (0.565 AUROC on human sketches) but staged over 82 human sketches reaches 0.808, matching 4-shot Gemini-3.8-Flash (0.857, n.s.); (iii)~live gating gave \emph{no detectable improvement}: in-loop precision 0.382, third attempts broke more than they repaired, and the rejection carried no diagnostic. The pilot never measured the human-likeness of generated strokes, never tested a per-channel verdict, set its threshold ad hoc, and ran one gated arm without feedback. This project delivers those deltas.
+\textbf{Pilot evidence and gap.} A pilot by team members \citep{drawverify2026pilot} built \dvv, a simulator-grounded generator over LIBERO \citep{liu2023libero}: 8,522 labelled prompts (31.8\% valid) from 800 demonstrations over 40 tasks, 15 of 18 corruption modes plus five grounding configurations, 275 human sketches (82 train / 193 test), and 326 sketches from a 17-participant in-the-loop study. Findings (Appendix~\ref{app:details}, \Figref{fig:evalsets}): (i)~generated prompts order seven API validators as human sketches do (Spearman $\rho=+0.93$) but inflate AUROC unevenly ($+0.13$ mean, $-0.06$ to $+0.25$); (ii)~Qwen3-VL-4B \citep{qwen3vl2025} with LoRA \citep{hu2022lora} trained on generated prompts alone transfers poorly (0.565 AUROC on human sketches) but staged over 82 human sketches reaches 0.808, matching 4-shot Gemini-3.8-Flash (0.857, n.s.); (iii)~live gating gave \emph{no detectable improvement}: in-loop precision 0.382, third attempts broke more than they repaired, and the rejection carried no diagnostic. The pilot never measured the human-likeness of generated strokes, never tested a per-channel verdict, fixed its threshold by a single recall target (0.85 recall on the 82 human training sketches) with no finite-sample guarantee, and gave neither gated arm a diagnostic in the rejection. This project delivers those deltas.
 
 \textbf{Hypotheses.} \textbf{H1 (hardening and transfer):} trained on the hardened tier alone, the validator reaches $\ge$0.70 AUROC on the 193 human test sketches (v1-only: 0.565), while a geometry-only classifier on that tier stays $\le$0.60 AUROC on an untouched audit split. \textbf{H2 (structured supervision):} supervising the five predicates as auxiliary generative targets lifts recall on directional failures of the human test split from 0.53 to $\ge$0.70 at no loss in $R_{\mathrm{val}}$, and generated reasons name the violated predicate with $\ge$80\% faithfulness on generated negatives and $\ge$70\% on human ones. \textbf{H3 (calibrated gate):} with $\hat\tau$ from Eq.~(\ref{eq:crc}), false-accept rate (FAR) on held-out human sketches is $\le\alpha=0.10$ in every seed, and at the pilot's recall (0.786) precision on ungated study sketches beats its 0.458 by $\ge$10 points. \textbf{H4 (feedback):} in a follow-up study ($\ge$20 participants), a gate that names the failing channel under a one-retry cap raises the validity of the finally sent instruction over the bare gate (pilot: 0.795) by $\ge$17 points, the pilot's minimum detectable effect.
 
@@ -97,7 +96,7 @@ with $\lambda,\mu$ tuned on validation; $\lambda=\mu=0$ recovers the pilot's ans
 \hat\tau=\inf\big\{\tau:\ \tfrac{1}{n+1}\textstyle\sum_{i=1}^{n}\ell_i(\tau)+\tfrac{1}{n+1}\le\alpha\big\}.
 \label{eq:crc}
 \end{equation}
-If calibration and test prompts are exchangeable, $\mathbb{E}[\mathrm{FAR}(\hat\tau)]\le\alpha$; with $n\approx35$ invalid calibration sketches $\alpha\ge1/(n{+}1)$, hence $\alpha=0.10$. We report the induced false-reject rate, precision at matched recall, and coverage across seeds, tiers, and study sketches (where exchangeability is \emph{not} guaranteed).
+If calibration and test prompts are exchangeable, $\mathbb{E}[\mathrm{FAR}(\hat\tau)]\le\alpha$; with $n=36$ invalid calibration sketches $\alpha\ge1/(n{+}1)$, hence $\alpha=0.10$. We report the induced false-reject rate, precision at matched recall, and coverage across seeds, tiers, and study sketches (where exchangeability is \emph{not} guaranteed).
 
 \section{Datasets, Metrics, Baselines, and Experimental Plan}
 \label{sec:plan}
@@ -112,7 +111,7 @@ If calibration and test prompts are exchangeable, $\mathbb{E}[\mathrm{FAR}(\hat\
 
 \section{Risks, Resources, and Team Plan}
 \label{sec:risks}
-\textbf{Risks and mitigations.} \textbf{Hardening over-removes or still leaks:} per-mode retention curves, removal capped at 40\%, both tiers released. \textbf{Small human sets:} 35 invalid calibration and 82 invalid test sketches; every human-set claim carries bootstrap CIs. \textbf{Study power:} the pilot's minimum detectable effect was 17 points with 12 participants; we recruit $\ge$20, within-participant, and replay logged attempts under the one-retry cap. \textbf{API drift, cost, compute:} pinned versions, cached pilot outputs; $\approx$2 GPU-h per Qwen3-VL-4B run (estimated from the pilot's 2-epoch stage), $\approx$45 runs $\approx$100 GPU-h on one A100/4090, $\approx$USD~100--150 of API calls. \textbf{Schedule:} go/no-go 25 Oct---if the v2 ceiling is still $\ge0.75$ at 60\% retention we report the best partial tier and shift effort to H2--H4. \textbf{Over-claiming safety:} the gate reduces, not eliminates, unsafe executions; nothing is executed on a robot.
+\textbf{Risks and mitigations.} \textbf{Hardening over-removes or still leaks:} per-mode retention curves, removal capped at 40\%, both tiers released. \textbf{Small human sets:} 36 invalid calibration and 82 invalid test sketches; every human-set claim carries bootstrap CIs. \textbf{Study power:} the pilot's minimum detectable effect was 17 points with 12 participants; we recruit $\ge$20, within-participant, and replay logged attempts under the one-retry cap. \textbf{API drift, cost, compute:} pinned versions, cached pilot outputs; $\approx$2 GPU-h per Qwen3-VL-4B run (estimated from the pilot's 2-epoch stage), $\approx$45 runs $\approx$100 GPU-h on one A100/4090, $\approx$USD~100--150 of API calls. \textbf{Schedule:} go/no-go 25 Oct---if the v2 ceiling is still $\ge0.75$ at 60\% retention we report the best partial tier and shift effort to H2--H4. \textbf{Over-claiming safety:} the gate reduces, not eliminates, unsafe executions; nothing is executed on a robot.
 
 \textbf{Roles and timeline (2026).} \emph{Member~1 (data):} generator v2, matching, audit, release. \emph{Member~2 (modelling):} structured objective, reasons, gate, LoRA training, ablations. \emph{Member~3 (evaluation):} API baselines, statistics, follow-up study, ethics. \emph{1--11 Oct:} IRB, recruitment, feedback interface. \emph{12--25 Oct:} generator v2, structured validator and gate, A1--A3; go/no-go. \emph{26 Oct--8 Nov:} follow-up study (H4), A4--A6, statistics. \emph{9--12 Nov:} final presentation ($\ge$90\% of results); \emph{13--27 Nov:} final report and artifacts.
 
@@ -143,21 +142,21 @@ Training data are simulator renders with no people or personal data; both sketch
 \node[data, right=of demos] (gt) {Ground-truth extraction\\object pose, region,\\gripper trajectory};
 \node[data, right=of gt] (valid) {Valid-prompt renderer\\guarded imprecision\\(in/out-point guards)};
 \node[data, right=of valid] (neg) {Counterfactual corruption\\4 families + 5 grounding\\configs; known predicate};
-\node[new, right=of neg] (hard) {\textbf{Shortcut hardening}\\matching to human strokes\\+ AFLite filtering;\\geometry \& scene-blind ceilings};
+\node[new, right=of neg] (hard) {\textbf{Shortcut hardening}\\human-stroke matching\\+ AFLite filtering;\\shortcut ceilings};
 \draw[arr] (demos) -- (gt); \draw[arr] (gt) -- (valid); \draw[arr] (valid) -- (neg); \draw[arr] (neg) -- (hard);
 \node[data, below=0.9cm of gt] (prompt) {Prompt $P=(I,C,A,L)$\\image + circle + arrow\\+ ``move this there''};
 \node[model, right=of prompt] (vlm) {Qwen3-VL + LoRA\\\textbf{structured verdict}\\{\tiny $\hat v_C,\hat v_A,\hat v_L,\hat v_X,\hat v_S\!\to\!\hat V\!\to$ reason}};
 \node[new, right=of vlm] (gate) {\textbf{Conformal gate}\\$\accept$ iff $s(P)\ge\hat\tau$\\$\mathbb{E}[\mathrm{FAR}]\le\alpha$ (Eq.~\ref{eq:crc})};
-\node[box, right=of gate] (out) {$\accept\to$ policy\\$\reject\to$ ask user,\\naming the failing channel};
+\node[box, right=of gate] (out) {$\accept\to$ policy\\$\reject\to$ ask user,\\name failing channel};
 \draw[arr] (prompt) -- (vlm); \draw[arr] (vlm) -- (gate); \draw[arr] (gate) -- (out);
-\draw[arr] (hard.south) |- node[pos=0.72, fill=white, inner sep=1.5pt]{labelled dataset: v1 (pilot, 8,522 ex.) and v2 (hardened); demo-disjoint splits; staged with 82 human sketches} ($(prompt.north)+(0,0.45)$) -- (prompt.north);
+\draw[arr] (hard.south) |- node[pos=0.72, fill=white, inner sep=1.5pt]{v1 (pilot, 8,522 ex.) and v2 (hardened), demo-disjoint; then 82 human sketches} ($(prompt.north)+(0,0.45)$) -- (prompt.north);
 \end{tikzpicture}}
 \caption{Method sketch (referenced from \Secref{sec:data}). \emph{Top:} simulator-grounded data generation (green = new). \emph{Bottom:} the validator generates a structured verdict and a reason; a conformal threshold yields an execute/ask decision.}
 \label{fig:method}
 \end{figure}
 
 \begin{table}[H]
-\caption{Failure taxonomy of the pilot release. Families A--D define 18 corruption modes, of which 15 are instantiated (Cov.\ \checkmark); C2, D1, D2 are unreachable under name-free captions (N/A) and become reachable in v2 through a named-caption slice. The Grounding family is counted separately. Mode IDs are the generator's keys and are non-contiguous.}
+\caption{Failure taxonomy of the pilot release. Families A--D define 18 corruption modes, of which 15 are instantiated (Cov.\ \checkmark); C2, D1, D2 are unreachable under name-free captions (N/A) because such a caption carries no noun to corrupt. The Grounding family is counted separately. Mode IDs are the generator's keys and are non-contiguous.}
 \label{tab:taxonomy}
 \begin{center}
 \scriptsize
@@ -168,7 +167,7 @@ Family & ID & Mode and generation mechanism & Cov. \\
 Referential (circle / ``which''; $v_C$) & A2 & Wrong-category object: circle a clearly different object than the target. & \checkmark \\
  & A3 & Near-miss circle: offset the centre so the target falls outside or only grazes the circle. & \checkmark \\
  & A4 & Empty-region circle: circle bare table or background. & \checkmark \\
- & A5 & Multi-object enclosure: inflate the radius to enclose the target and a distractor (tests $v_S$). & \checkmark \\
+ & A5 & Multi-object enclosure: inflate the radius to enclose the target and a distractor. & \checkmark \\
  & A6 & Degenerate size: dot-sized or whole-frame circle. & \checkmark \\
 \midrule
 Directional (arrow / ``where''; $v_A$) & B1 & Wrong destination: retarget the head to a different container or region. & \checkmark \\
@@ -280,6 +279,6 @@ Geometry-only LightGBM (gen.\ fit) & -- & -- & -- & -- & -- & 0.741 & $^*$ \\
 
 \textbf{Human data.} Ungated corpus: 11 participants, 275 sketches over two rounds covering 34 tasks across the four LIBERO suites; median drawing time 8.2\,s; each sketch labelled valid/invalid by human annotators independently of any model, invalid ones with a failure code from the taxonomy; task-disjoint split 82 train / 193 test. In-the-loop study: 17 participants, 21 trials each in three blocks (no gate, model gate, control gate rejecting on the ground-truth geometry of the original annotation); 250 analysed trials, 326 labelled sketches. Outcomes: validity of the finally sent instruction 0.841 (no gate), 0.795 (model gate, 1.38 attempts/trial), 0.726 (control gate); the model gate's in-loop precision 0.382 and recall 0.500; trials accepted at the second attempt were only repaired (6/0), trials that reached a third broke more than they repaired (6 broken / 2 repaired); of six third-attempt breaks, five changed the prompt rather than the drawing. Replaying the logs with a one-retry cap gives 0.821 (model) and 0.762 (control).
 
-\textbf{Pilot error profile.} On the human test split the staged 4B validator's recall on invalid prompts by family is 0.80 (referential), 0.53 (directional) and 0.77 (cross-modal and grounding) against 0.96 / 0.95 / 1.00 for Gemini-3.8-Flash, which buys that recall by rejecting half of the valid sketches ($R_{\mathrm{val}}=0.505$). Directional failures are the weakest slice, which motivates H2; geometry-only fits reach 0.741 AUROC on the human test split but only 0.50--0.56 on study sketches, all significantly below Gemini-3.8-Flash.
+\textbf{Pilot error profile.} On the human test split the staged 4B validator's recall on invalid prompts by family is 0.80 (referential), 0.53 (directional) and 0.77 (cross-modal and grounding) against 0.96 / 0.95 / 1.00 for Gemini-3.8-Flash, which buys that recall by rejecting half of the valid sketches ($R_{\mathrm{val}}=0.505$). Directional failures are the weakest slice, which motivates H2; geometry-only fits trained on generated data reach 0.741 AUROC on the human test split but only 0.53--0.56 on study sketches and 0.50--0.54 on the ungated ones, every fit significantly below Gemini-3.8-Flash.
 
 \end{document}
